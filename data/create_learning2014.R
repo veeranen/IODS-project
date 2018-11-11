@@ -33,8 +33,9 @@ df$stra <- df$st_os + df$st_tm
 df$deep_adj <- df$deep / 12
 df$surf_adj <- df$surf / 12
 df$stra_adj <- df$stra / 8
+df$Attitude_adj <- df$Attitude / 10
 
-vars <- c("gender", "Age", "Attitude", "deep_adj", "stra_adj", "surf_adj", "Points") # Here we create a subset of the original data that includes the wanted variables and observations.
+vars <- c("gender", "Age", "Attitude_adj", "deep_adj", "stra_adj", "surf_adj", "Points") # Here we create a subset of the original data that includes the wanted variables and observations.
 ds <- subset(df, Points > 0, 
                   select = vars)
 
