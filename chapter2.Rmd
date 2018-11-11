@@ -1,7 +1,115 @@
-# Insert chapter 2 title here
 
-*Describe the work you have done this week and summarize your learning.*
+## Week 2: Regression and model validation
 
-- Describe your work and results clearly. 
-- Assume the reader has an introductory course level understanding of writing and reading R code as well as statistical methods
-- Assume the reader has no previous knowledge of your data or the more advanced methods you are using  
+In this report we will explore and analyze a dataset that is wrangled from a larger dataset. The data contains information about the students of the course called *Introduction to social statistics*. The original data can be found from [here](http://www.helsinki.fi/~kvehkala/JYTmooc/JYTOPKYS3-data.txt) and explanations of the variables from [here](http://www.helsinki.fi/~kvehkala/JYTmooc/JYTOPKYS3-meta.txt). Some of the variables are adjusted sum variables from the original dataset. The data that is used in this report can also be found from [here](http://s3.amazonaws.com/assets.datacamp.com/production/course_2218/datasets/learning2014.txt) if needed.
+
+First, we will take a good look at the data: structure, variables, observations, the values etc. After we have enough knowledge of the data we can start analyzing. In the analysis part we will use the regression model and fit it to the data. We are also going to use summaries and graphics for describing and visualizing the data.
+
+
+### Reading and exploring the data
+
+I have already preprocessed the data and saved it in my IODS project file. The data is saved as a CSV file so we'll read the data with ``read.csv()`` command. The read data is named as ``learn``.
+
+```{r test, echo=FALSE}
+learn <- read.csv('C:/Users/F2530951/Documents/IODS-project/data/learning2014.csv')
+
+```
+
+Before any analysis we need to know what the data is like. That is why we'll use few useful commands which will desribe the data to us so that we don't have to try to read all the values separately. ``dim()`` tells us the number of observations and variables of the data. With ``str()`` we can see the structure of the data. It will show us how many observations and variables the dataset has and what are the datatypes of the variables. It also shows 10 first obseravtions of the dataset. The ``summary()`` is used to summarize the data - it will tell us the statistics of each variable so we can get a hint how the data is distributed.
+
+```{r}
+dim(learn)
+
+str(learn)
+
+summary(learn)
+
+```
+
+Our dataset has seven variables called ``gender``, ``Age``, ``Attitude``, ``deep_adj``, ``stra_adj``, ``surf_adj`` and ``Points`` ("adj" means that the original variable is adjusted to fit in a certain scale). The number of observations is 166. The summary shows that the variables ``Attitude``, ``deep``, ``stra`` and ``surf`` are on a scale 1 to 5, the age of the observated people is from 17 to 55 and that their points differ between seven and 33. Summary also calculates median and mean of each variable, except gender which is not a quantitative variable. We can see that there are almost twice as much females than males in the dataset. 
+The description link of the variables (link is given in the first chapter of this report) says that the variable Attitude measures the attitude of the respondents towards statistics. Deep, Strategic and Surface are sum variables calculated from multiple variables and they measure how much the students belong in a certain learning approach. The higher the value, the more a student seems to use the method. Means and medians are all close to number 3 in each approach but we can see that deep has highest mean and median while surface has the lowest ones.
+
+Now we are more familiar with the data so we can move on with the visualization to get more information about the distributions and relationships between the variables.
+
+
+### Visualization
+
+First it would be good to find out how the observations are distributed within each variable. One way to achieve this is to make some graphs from the variables. All the variables except gender are numerical and somewhat continuous so that is why a histogram would be a worthy option. The histograms look like this:
+```{r}
+par(mfrow = c(2,3))
+hist(learn$Age)
+hist(learn$Attitude_adj)
+hist(learn$deep_adj)
+hist(learn$stra_adj)
+hist(learn$surf_adj)
+hist(learn$Points)
+```
+
+We can clearly see that most of the respondents are 20-25 years old. Almost half of the observations belong in that group. Rest of the groups are much smaller, especially age of 40 and older. Other variables appear to be almost normally distributed - most of the values are located in the middle of the range and the bars get shorter when moving closer to the minimum and maximum points. The summary statistics that were calculated earlier make more sense now that they are visualized in a graph. 
+
+We would like to know more about the relationships between different variables. Are some of the variables correlaing or is there a certain trend going on? First would be interesting to find out if different learning approaches have anything to do with the points and vice versa. We'll use a scatter plot for this purpose. Let's make simple plots for the variables ``deep``, ``stra`` and ``surf`` with ``Points``:
+
+```{r}
+plot(learn$deep_adj, learn$Points, main = "Deep approach and Points", 
+  	xlab="Deep", ylab = "Points")
+
+plot(learn$stra_adj, learn$Points, main = "Strategic approach and Points", 
+  	xlab="Strategic ", ylab = "Points ")
+
+plot(learn$surf_adj, learn$Points, main = "Surface approach and Points", 
+  	xlab="Surface ", ylab = "Points ")
+
+```
+
+The data points seem to scatter all aroud the range and there is no visible correlation in any of the plots. The data mass is located a little bit differently within each learning approach but none of them has anything to do with the points earned. We could try the same with the attitude variable and points to find out if they have anything to do with each other.
+
+```{r}
+plot(learn$Attitude_adj, learn$Points, main = "Attitude towards statistics and Points", 
+  	xlab="Attitude", ylab = "Points")
+```
+
+This looks more interesting. We can see that high attitude scores locate more higher in the y axis. This implies that those who have said to have better attitude towards statistics have higher scores. I'd like to know if there are any differnce between different groups. Let's plot same variables again but this time we'll mark females and males in different colors. This way we can see if females and males differ in any way. This time we'll use package ``ggplot`` that makes a little bit different graphs.
+
+```{r}
+library(ggplot2)
+
+ggplot(learn, aes(x = Attitude_adj , y = Points, color = gender, shape = gender)) + 
+  geom_point()
+```
+
+It is a bit difficult to compare males and females since there are twice more females. However, it seems that there is no significant difference between females and males so the attitude score and exam points distribute pretty same in both genders. 
+
+Next we can do some deeper analysis to the data and actually do some model fitting!
+
+
+### Regression and model fitting
+
+We are supposed to choose three explanatory variables for regression model. Because we already examined the correlation between ``attitude`` and ``Points`` and actually found something interesting it would be a good choice to take it as a one variable. Let's also choose age because we don't know yet how it would impact the model. Last one shall be ``deep`` because I'd like to see if one learning approach would actually make the model much different.
+
+The simple linear regression is quite straight-forward to do with R because it actually doesn't need much code. Let's fit the model and take a look at the summary and some graphs:
+
+```{r}
+model <- lm(Points ~ Attitude_adj + Age + deep_adj, data = learn)
+summary(model)
+par(mfrow = c(2,2))
+plot(model)
+
+```
+
+First we'll examine the summary. We can see that residuals did not distribute very symmetrically. It means that some of the observed values differed a lot from the predicted model. The estimate for the value of the alpha is 15.61 and for the beta values are 3.59 (Attitude), -0.08 (Age) and -0.60 (Deep). This tells us that an average student in our dataset would get approximately 15.61 points and one point increase on attitude would increase the exam points approximately by 3.6. If the age would increase by one year the number of points would actually decrease but the impact is actually very low. One point increase in deep approach would also decrease the point but in this case the amount is really small. If we'll look at the p-values (``P(>|t|)``) we can see that the values are pretty high on age and deep ones (0.149 and 0.423) which means that we cannot really conclude that there is a significant relationship between points and those two variables. But if we look at the p-value of the attitude variable, it is actually really small which implies that the relationship between points and attitude is significant. So this tells us that the enthusiasm towards statistics and higher points have something to do with each other.
+There are also multiple R-squared and adjusted R-squared values that describes how well the model fits the data. The closer the value is to, 1 the better fit and the better the explanatory variables actually explain the variable we are trying to explain. In this case the value is only ~0.2 which means pretty poor fit. We would need other and better explaining variables to get better fit. The adjusted R-squared value adjusts the model for the number of variables since the multiple R-squared always increases when more variables are added. 
+The graphs visualize residuals and model goodness. **Residuals vs Fitted** one shows if there are any other possible relationships between predictor and outcome variables that are not linear. In our case everything seems to be fine since the line is a nice horizontal line. **The normal QQ** plot tells us how the residuals are distributed. They seem to follow pretty straight line even though there are few values that are pretty far from the line. It means that the residuas are approximately normally distributed which is what we are hoping. **Residuals vs leverage** can tell if there are outliers or extreme values that impact too much on the model. If that would be the case, the Cook's distance would get closer to the red line in the middle and there would be values outside the line compared to the graph we are having here. We don't seem to have any extreme values that should be left out. 
+
+Let's try the model again but without the variables that do not actually have significant relationship with the exam points. This means that we'll only use variable ``Attitude_adj``.
+
+```{r}
+second_model <- lm(Points ~ Attitude_adj, data = learn)
+summary(second_model)
+par(mfrow = c(2,2))
+plot(second_model)
+
+```
+
+The summary statistics changed a little bit but the significance of the relationship between the variables did not change. The alpha value decreased little bit and the p value increased but the significance is still the same. Also the R-squared value decreased which means that the attitude value does not on its own explain the exam points very well.
+
+All in all, we noticed some correlations between variables but they do not explain each other very well so we would need more tests to actually explain the exam points.
