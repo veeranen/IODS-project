@@ -1,0 +1,183 @@
+
+```{r pkgs, include = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+## Week 3: Logistic regression
+
+### The data
+
+In this report we will analyze a dataset from UCI Machine Learning Repository. The data is called [Student Performance Dataset](https://archive.ics.uci.edu/ml/datasets/Student+Performance) and it actually consists two different datasets. Both datasets are collected from students of Portuguese schools. The first one is from students of Mathematics and the other is from Portuguese students. The data has been preprocessed earlier so now the dataset for the analysis is a single dataframe that is merged from two sets. The data has some basic information about the students - for example age, sex, parents' education and job, and relationship status - but the main focus is in the variables about alcohol consumption. Let's take a closer look at the data.
+
+First we'll take a look at the variables:
+```{r}
+alc <- read.csv("~/IODS-project/data/alc.csv")
+
+dim(alc)
+colnames(alc)
+```
+
+The data called ``alc`` has 35 variables and 382 observations. The dataset does not have student IDs or any other unambiguous identifiers. The respondents are identified by a combinations of 13 different variables that are actually the 13 first columns in the dataframe. There are four variables especially about alcohol consumptions: ``Dalc``, ``Walc``, ``alc_use`` and ``high_use``. First one tells the amount of alcohol consumption in workdays and the second one in weekends. Third one is the average of these two and the fourth one is a boolean variable that tells if the consumption is high or not (high use means that the average consumption is greater than two). The meanings of other variables can be seen from the UCI Machine Learning Repository's page that is linked in the beginning of this report.
+
+
+### Hypotheses and distribution exploring
+
+We want to know if there are any relationships between different variables and alcohol consumption. The variables I'm interested in are weekly studytime (``studytime``), quality of family realtionships (``famrel``), current health status (``health``) and number of absences (``absences``). No we can state the hypotheses:
+
+  - **$H_0$:** Weekly studytime and alcohol consumption do not have a significant relationship.
+  - **$H_1$:** Weekly studytime and alcohol consumption do have a significant relationship. My wild guess is that if there was a relationship, the higher the studytime, the lower alcohol consumption.
+
+  - **$H_0$:** Quality of family relationships and alcohol consumption do not have a significant relationship.
+  - **$H_1$:** Quality of family relationships and alcohol consumption do have a significant relationship. Without other information I would think that difficult family relationships indicate higher alcohol consumption.
+
+  - **$H_0$:** Current health status and alcohol consumption do not have a significant relationship.
+  - **$H_1$:** Current health status and alcohol consumption do have a significant relationship. It is already known that high alcohol consmuption increases health risks but there are other factors that impact on health too. 
+
+  - **$H_0$:** Number of absences and alcohol consumption do not have a significant relationship.
+  - **$H_1$:** Number of absences and alcohol consumption do have a significant relationship. I think that if there was a relationship between these variables, probably higher amount of absences would go together with higher alcohol consumption.
+
+The qualities of the relationships in the H1s are only my assumings before we know anything else. Next we will move on to visualizing these variables. Let's start by making barcharts or histograms of each variable to see how the values distribute.
+
+```{r}
+library(ggplot2)
+
+ggplot(alc, aes(x = as.factor(alc_use))) + geom_bar(col = "thistle", fill = "thistle")
+ggplot(alc, aes(x = as.factor(studytime))) + geom_bar(col = "powderblue", fill = "powderblue")
+ggplot(alc, aes(x = as.factor(famrel))) + geom_bar(col = "firebrick", fill = "firebrick")
+ggplot(alc, aes(x = as.factor(health))) + geom_bar(col = "darkseagreen", fill = "darkseagreen")
+ggplot(data = alc, aes(alc$absences)) + geom_histogram(col = "darksalmon", fill = "darksalmon")
+```
+
+We can see that most of the students' alcohol consumption is very low or low. Minority of the students belong in the high consumption group. If we take a look at the second chart, clearly the highest bar is the one with value two which means studying 2 to 5 hours in a week. Other groups are much smaller, and the number of students that study more than 10 hours a week is far less than 50. Also mot of the students have a good relationships to their family, are in a good health and have 10 or less absences.
+
+Now we can take a look at the variables together. Let's start with weekly studying time and alcohol usage. A boxplot would be a good choice for this purpose since both of the values are not continuous and in a narrow range.
+
+```{r}
+ggplot(alc, aes(x = as.factor(studytime), y = alc_use)) + 
+    geom_boxplot(fill = "palevioletred4") + 
+    xlab("studytime")
+
+```
+
+There seems to be some kind of pattern between these variables. The ones that don't spend much time on studying seem to have higher alcohol consumption compared to the ones with longer studying times. There seems to be few outliers on the right side of the x axis though. The boxes and the ranges clearly locate lower when going closer to right side of the plot. None of the groups don't have significantly high average consumption but it seems that there is a correlation between study time and alcohol consumption.
+
+Next we'll do the same with family relationships:
+
+```{r}
+ggplot(alc, aes(x = as.factor(famrel), y = alc_use)) + 
+    geom_boxplot(fill = "tan") + 
+    xlab("famrel")
+```
+
+This time differences between groups don't seem as clear as in the previous one. The ranges are not the same width and the means are not completely same but they are quite close to each other. Most of the values clearly are located below value 3 in alcohol consumption. The means of the groups that have better relationships to their families are slightly lower And the width is the narrowest in the the group 5 though there are also many outliers.
+
+
+```{r}
+ggplot(alc, aes(x = as.factor(health), y = alc_use)) + 
+    geom_boxplot(fill = "rosybrown1") + 
+    xlab("health")
+```
+
+This is interesting. I was quite sure that those who say having bad health would be the ones that use more alcohol but it seems not be the case. The lowest alcohol consumption seems to be in groups 1 and 3 and they are ones with bad or "not-bad-not-good"" health. The highest means are in groups 2 and 5 which is unexpected. Overall it looks like I was pretty wrong about these two variables.
+
+Last we have the absences. This is a bit tricky variable because we actually have over 40 different classes. I am going to do a boxplot too but before that I will divide the absence variable into groups. The variable is not distributed evenly at all so the ranges of the groups are not going to be completely same range. The groups will be:
+  **1** - No absences at all or 1 absence
+  **2** - 2 to 5 absences
+  **3** - 6 to 10 absences
+  **4** - 10 to 15 absences
+  **5** - More than 15 absences
+
+The possible maximum values of absences is 93 but in the data the maximum is 45.
+
+```{r}
+attach(alc)
+alc$absences_g[absences <= 1] <- 1
+alc$absences_g[absences > 1 & absences <= 5] <- 2
+alc$absences_g[absences > 5 & absences <= 10] <- 3
+alc$absences_g[absences > 10 & absences <= 15] <- 4
+alc$absences_g[absences > 15] <- 5
+detach(alc)
+
+ggplot(alc, aes(x = as.factor(absences_g))) + geom_bar(col = "powderblue", fill = "powderblue")
+```
+
+Now that we have our new categorized variable we can make the boxplot.
+
+```{r}
+ggplot(alc, aes(x = as.factor(absences_g), y = alc_use)) + 
+    geom_boxplot(fill = "paleturquoise3") + 
+    xlab("absences")
+```
+
+Here we can also see some differences between different amounts of absences. There are clearly higher alcohol consumption in the groups that have high number of absences. The first and third quartiles in the group 4 are completely above the ones of the group one which indicates that there is clear difference. Interesting is that the group 5 is located lower than 4 even though the means seem to be same.
+
+The plots indicate that in some of the cases there could happen a rejection of the null hypothesis, especially with the study time variable. But we don't want to celebrate yet since there arestill lots of things to test.
+
+Last we will make cross-tabulations to each four variables with the value ``high_use`` as a summary and to see how they act together. We'll use the ``gmodels`` package for the tabulation.
+
+```{r}
+library(gmodels)
+CrossTable(alc$high_use, alc$studytime)
+CrossTable(alc$high_use, alc$famrel)
+CrossTable(alc$high_use, alc$health)
+CrossTable(alc$high_use, alc$absences_g)
+```
+
+There are a lot to chew in those tables but we don't have to look all of the values in them. The only thing that actually catches our attention is that some of the cells have a really small sample size which can be a little bit problematic because they might give a bit biased impression in the plots. However, it doesn't mean that there isn't any relationships between these variables and that is what we are going to look closer next.
+
+
+### Logistic regression
+
+Now we are ready to use the logistic regression to see how well our variables can explain the ``high_use`` variable which means the high usage of alcohol. Our model is obviously binomial logistic regression model since the variable we re trying to predict is binary (TRUE/FALSE). Let's test the model:
+
+```{r}
+model <- glm(high_use ~ studytime + famrel + health + absences, data = alc, family = "binomial")
+summary(model)
+```
+
+If we look at the summary we can see that ``studytime`` and ``famrel`` have negative values in coefficients (-0.52 & -0.25). This means that increase in one of these values means decrease in alcohol usage. So according to the model, longer studying times and better family relationships would mean lower alcohol consumption. ``health`` and ``absences`` seem to have non-negative values (0.095 & 0.078) so increase in these values would mean also increasing alcohol consumption. But if we look at the p-values (``Pr(>|z|)`` column) we can see that all of them except the one with health are less than 0.05 which indicates that studying time, family realtionships and absences have significant relationships with high alcohol usage. Although family relationships variable is *just* under the line. Instead health does not have significnace. This makes sense in some way because usually it is other way around: alcohol consumption is a common factor that is explaining quality of health. 
+
+Here are the coefficients as odds ratios and also the confidence intervals: 
+```{r}
+ratios <- coef(model) %>% exp
+cint <- confint(model) %>% exp
+
+cbind(ratios, cint)
+```
+
+These values mean that the ones with ratio greater than 1 are associated with TRUE value in ``high_use``. And in this case they are health and absences like we concluded from the summary. The confidence intervals differ a lot between variables. For example with absences the interval is really narrow compared to the one with intercept. 
+So if we think about the hypotheses we stated earlier, we could reject three of them. And I was not completely wrong when I guessed the quality of the relationships.
+
+
+### Predicting
+
+Now we can use our model for making predictions! We will use all four variables even though one of them was not very efficient. We are first going to make predictions and calculate the probabilities of the TRUE values. If the probability is greater than 0.5 the value will be TRUE and vice versa. We will produce a table that will show the actual ``high_use`` values and the predicted ones.
+
+```{r}
+probabilities <- predict(model, type = "response") # predict the probabilites
+alc <- mutate(alc, probability = probabilities) # add the probabilities in the 'alc' dataframe
+alc <- mutate(alc, prediction = probability > 0.5) # add the predicted values
+
+table(high_use = alc$high_use, prediction = alc$prediction)
+
+ggplot(alc, aes(x = probability, y = high_use, col = prediction)) + geom_point()
+```
+
+Okay, since there are no zero values, our model was not able to predict everything right. The diagonal values are the ones that our model actually got right. Apparently our model was not good predicting TRUE values because it mistakenly guessed 98 TRUE values as FALSE. It also predicted 15 truly FALSE values as TRUE. This means that the probabilites are little bit too high since it has difficulties with TRUE values.
+
+We would like to know the actual accuracy of our predictions, so let's calculate how much we actually predicted wrong:
+
+```{r}
+mean(abs(alc$high_use - alc$probability) > 0.5)
+```
+
+So less than third of the values were predicted incorreclty. It does not sound that great. However, it would be interesting to find out how well we would do if we just guessed the values, so let's try that!
+
+```{r}
+alc$guess <- runif(382, 0, 1)
+
+mean(abs(alc$high_use - alc$guess) > 0.5)
+```
+
+So as we can see, our model actually predicted much better than just random guessing! We probably could improve our model by choosing other variables but as long as we can do better than guessing I think we are doing something right.
