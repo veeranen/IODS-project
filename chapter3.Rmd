@@ -39,8 +39,7 @@ We want to know if there are any relationships between different variables and a
 
 The qualities of the relationships in the H1s are only my assumings before we know anything else. Next we will move on to visualizing these variables. Let's start by making barcharts or histograms of each variable to see how the values distribute.
 
-```{r}
-library(ggplot2)
+```{r, warning=FALSE, message=FALSE}
 
 ggplot(alc, aes(x = as.factor(alc_use))) + geom_bar(col = "thistle", fill = "thistle")
 ggplot(alc, aes(x = as.factor(studytime))) + geom_bar(col = "powderblue", fill = "powderblue")
@@ -81,12 +80,12 @@ ggplot(alc, aes(x = as.factor(health), y = alc_use)) +
 
 This is interesting. I was quite sure that those who say having bad health would be the ones that use more alcohol but it seems not be the case. The lowest alcohol consumption seems to be in groups 1 and 3 and they are ones with bad or "not-bad-not-good"" health. The highest means are in groups 2 and 5 which is unexpected. Overall it looks like I was pretty wrong about these two variables.
 
-Last we have the absences. This is a bit tricky variable because we actually have over 40 different classes. I am going to do a boxplot too but before that I will divide the absence variable into groups. The variable is not distributed evenly at all so the ranges of the groups are not going to be completely same range. The groups will be:
-  **1** - No absences at all or 1 absence
-  **2** - 2 to 5 absences
-  **3** - 6 to 10 absences
-  **4** - 10 to 15 absences
-  **5** - More than 15 absences
+Last we have the absences. This is a bit tricky variable because we actually have over 40 different classes. I am going to do a boxplot too but before that I will divide the absence variable into groups. The variable is not distributed evenly at all so the ranges of the groups are not going to be completely same range. The groups will be:  
+    **1** - No absences at all or 1 absence  
+    **2** - 2 to 5 absences  
+    **3** - 6 to 10 absences  
+    **4** - 10 to 15 absences  
+    **5** - More than 15 absences  
 
 The possible maximum values of absences is 93 but in the data the maximum is 45.
 
@@ -116,7 +115,7 @@ The plots indicate that in some of the cases there could happen a rejection of t
 
 Last we will make cross-tabulations to each four variables with the value ``high_use`` as a summary and to see how they act together. We'll use the ``gmodels`` package for the tabulation.
 
-```{r}
+```{r, warning=FALSE, message=FALSE}
 library(gmodels)
 CrossTable(alc$high_use, alc$studytime)
 CrossTable(alc$high_use, alc$famrel)
@@ -139,7 +138,7 @@ summary(model)
 If we look at the summary we can see that ``studytime`` and ``famrel`` have negative values in coefficients (-0.52 & -0.25). This means that increase in one of these values means decrease in alcohol usage. So according to the model, longer studying times and better family relationships would mean lower alcohol consumption. ``health`` and ``absences`` seem to have non-negative values (0.095 & 0.078) so increase in these values would mean also increasing alcohol consumption. But if we look at the p-values (``Pr(>|z|)`` column) we can see that all of them except the one with health are less than 0.05 which indicates that studying time, family realtionships and absences have significant relationships with high alcohol usage. Although family relationships variable is *just* under the line. Instead health does not have significnace. This makes sense in some way because usually it is other way around: alcohol consumption is a common factor that is explaining quality of health. 
 
 Here are the coefficients as odds ratios and also the confidence intervals: 
-```{r}
+```{r, warning=FALSE, message=FALSE}
 ratios <- coef(model) %>% exp
 cint <- confint(model) %>% exp
 
@@ -154,7 +153,7 @@ So if we think about the hypotheses we stated earlier, we could reject three of 
 
 Now we can use our model for making predictions! We will use all four variables even though one of them was not very efficient. We are first going to make predictions and calculate the probabilities of the TRUE values. If the probability is greater than 0.5 the value will be TRUE and vice versa. We will produce a table that will show the actual ``high_use`` values and the predicted ones.
 
-```{r}
+```{r, warning=FALSE, message=FALSE}
 probabilities <- predict(model, type = "response") # predict the probabilites
 alc <- mutate(alc, probability = probabilities) # add the probabilities in the 'alc' dataframe
 alc <- mutate(alc, prediction = probability > 0.5) # add the predicted values
