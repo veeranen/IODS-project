@@ -1,0 +1,149 @@
+---
+title: "chapter5"
+author: "Veera Nenonen"
+date: "1 joulukuuta 2018"
+output: html_document
+---
+
+## Week 5: Dimensionality reduction techinques
+
+This week's exercises were about multiple dimensions and how to deal with them. **Dimanesionality reduction techinques** help to decrease the dimensions of phenomena so that they are easier to understand and visualize. It is not rare to have dozens of dimensions so it can be really useful to narrow them down. But this must be done so that we don't lose any important information about the variables - only the irrelevant dimensions that cause noise!
+We are using two different methods in this report: *principal component analysis (PCA)* and *multiple correspondence analysis (MCA)*.
+
+### The data
+
+The data we are using is from [United Nations Development Programme](http://hdr.undp.org/en/content/human-development-index-hdi) and the datasets are about Human Development Index and Gender Inequality Index. In previous week's data wrangling exercise those two separate datasets were merged and some of the variables were little bit changed. So we are using one dataset called ``human`` that looks like this:
+
+```{r, warning=FALSE, message=FALSE}
+human <- read.csv("~/IODS-project/data/human2.csv", row.names = 1)
+str(human)
+summary(human)
+```
+
+This data has 8 variables and 155 observations. Observations are named by countrys that rows are representing so the country name is not a seperate variable. We can see that there are no variables that have string as datatype. Ranges of variables differ a lot from each other. It seems pretty logical since for example ``gni`` that stands for Gross National Income measures money amounts and for example ``edu_ratio`` measures the secondary education rate between males and females. 
+
+Next we would like to know how the variables distribute and correlate with each other. It would give to us a little bit perspective about the relationships in the dataset. Here are histograms of the variables and a correlation matrix that will show all correlations between the variables:
+
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(corrplot)
+
+ggplot(data = human, aes(human$edu_ratio)) + geom_histogram()
+ggplot(data = human, aes(human$lab_ratio)) + geom_histogram()
+ggplot(data = human, aes(human$edu_exp)) + geom_histogram()
+ggplot(data = human, aes(human$life_exp)) + geom_histogram()
+ggplot(data = human, aes(human$gni)) + geom_histogram()
+ggplot(data = human, aes(human$mmr)) + geom_histogram()
+ggplot(data = human, aes(human$birth)) + geom_histogram()
+ggplot(data = human, aes(human$parl)) + geom_histogram()
+
+
+corrplot(cor(human), method = "circle")
+```
+
+It seems that all the variables distribute quite differently. The distribution of the education ratio (``edu_ratio``) is probably the closest one to normal distribution. Others are some what tailed or biased. Now if we look at the correlation matrix we can see some interesting results. There seems to be quite high correlations between some of the variables. For example life expectancy rate (``life_exp``) and maternal mortality ratio (``mmr``) have a strong negative correlations which means that if the value of one of those variables increases, the value of the orher one would decrase and vice versa. It would mean that in the countries that have high life expetancy have also a low maternal mortality ratio which actually makes sense. Finalnd is one of those countries that have a high life expectancy and also a very low MMR because of a good health care system. 
+
+The other variables that also seem to correlate are for example MMR and secondary education ratio (negative correlation), expected years of schooling (``edu_exp``) and life expectancy (positive correlation), expected years of schooling and MMR (``negative correlation``) and MMR and birth rate (``birth``) (positive correlation). All of these relationships seem logical to me since education, birth rate and life expectancy usually go hand in hand.
+There also seem to be variables that don't really have anything to do with other variables. ``parl`` is one example.
+
+Now we can move on to actual dimensional reduction to see how we can impact the data.
+
+
+### PCA
+
+First we are going to perform the PCA on the unstandardized data to see how it works. We will perform the PCA and print the summary of it. We also make a biplot to see how PCA looks like when visualized.
+
+```{r, message=FALSE, warning=FALSE}
+pca_human <- prcomp(human)
+summ <- summary(pca_human)
+summ
+
+pr <- round(100 * summ$importance[2,], digits = 1) 
+pr
+
+lab <- paste0(names(pr), " (", pr, "%)")
+biplot(pca_human, cex = c(0.8, 1), col = c("rosybrown", "darkslategray4"), xlab = lab[1], ylab = lab[2])
+```
+
+Let's first look at the summary. Standard deviation tells us how much variance is associated in each principle component and the others are the proportional values. We can clearly see that the PC1 captures pretty much all the deviation since its value in the last row is 100. It seems a little bit weird that the values are not distributed any better between PCs. I can tell one reason right away: we did not standardize our data. PCA is really sensitive to variables that have large range so it assumes that the ones with large scale has actually the greatest variance. If we take a look at the biplot we can see that the longest arrow (which is actually really long compared to others) belongs to the variable ``gni``. **And** when looking at the min and max values from the summary we made when introducing the dataset, we can see that ``gni`` has clearly the largest variance since it can get values from 581 to 123124. This method is pretty much useless to this data unless we do the standardization so that our variables are on a same scale.
+
+Here is a summary of the dataset after standardization;
+```{r, message=FALSE, warning=FALSE}
+human_scaled <- as.data.frame(scale(human))
+summary(human_scaled)
+```
+
+Now the deviation between different variables should be on the same scale so the differences are actually comparable.
+
+Let's try the PCA again but with the standardized data and see if it had any impact:
+
+```{r, message=FALSE, warning=FALSE}
+pca_human_s <- prcomp(human_scaled)
+summ_s <- summary(pca_human_s)
+summ_s
+
+pr_s <- round(100 * summ_s$importance[2,], digits = 1) 
+pr_s
+
+lab_s <- paste0(names(pr_s), " (", pr_s, "%)")
+biplot(pca_human_s, cex = c(0.8, 1), col = c("steelblue", "mediumvioletred"), xlab = lab_s[1], ylab = lab_s[2])
+```
+
+This looks **much** better! So the standardization worked. Now all the variance is not associated only in one PC but the others as well. Over half is still on the first one though (53.6). Now approximately 70% of the variance of the 8 variables is captured in the two principle components. These two components are visualized in the biplot. All the observations are placed on the scatterplot to see how they are located next to the PCs. The pink arrows are the variables from our dataset. The angles between two arrows or between an arrow and either x or y axis represent correlations between these objects. The smaller the angle, the higher the *positive* correlation. So for example ``birth`` and ``mmr`` are really close to each others which means that they have a strong positive correlation. This was actually also able to notice from the correlation matrix we made earlier. Other variables that also correlate strongly are ``gni`` and ``edu_ratio``. We can also see that for example ``life_exp`` is contributing the PC1 since it is pointing to same direction. Meanwhile ``lab_ratio`` and ``parl`` are pointing downward which means that they are contributing PC2. 
+
+We actually made earlier some analysis about these phenomena and their relationships but we can talk about them a little more. As we earlier stated, it looks like that countries that have lower life expectancy tend to have higher MMr and also higher birth rate. Also the people from these countries have lower educational level and are apparently more poor since the GNI is also lower in them. From the plot we can see that examples from these countries are Sierra Leone and Tanzania since they are on the left side of the plot. On the other side we have for example Denmark that is much wealthier country where both men and women have more years in education. In Denmark people have high life expectancy but also less children compared to people in Sierra Leone for example. One thing that we are also interested in is that Rwanda is a little bit separated from others and it is located in the bottom of the plot - which is the place were ``parl`` is pointing at. ``parl`` means the ratio of men and women in the country's parliament. With quick checking we can see that Rwanda is the country with most women in their parliament! So apparently ratio of men and women in parliament or labour ratio do not have much to do with country's economy, education or health factors.
+
+PC1 is associated with six variables while PC2 with two which might explain why PC1 has so high percentage. It is fascinating to notice how much information we can get from a single plot. It would be even more interesting to see how the observations would look like on the plot after grouping, but that is not the main point in this exercise. 
+
+I think this is enough analysis for the PCA so we can move on to MCA.
+
+
+### MCA
+
+For the multiple correspondence analysis we are using different data. It it the ``tea`` data from the ``FactoMineR`` package in R. Here is the first glance of the data: 
+
+```{r, message=FALSE, warning=FALSE}
+library(FactoMineR)
+data(tea)
+
+str(tea)
+summary(tea)
+
+```
+
+The dataset has 36 variables and 300 observations. All of the variables except age are categorical variables and they are about tea consumption. There are also some basic information of the respondents. Since there are so many variables we are not going to use all of them. I'll choose eight variables like we had in the previous exercise. Those variables are ``breakfast``, ``tea.time``, ``evening``, ``spirituality``, ``healthy``, ``sex``, ``Sport`` and ``age`` (the categorized one). Here is the summary of the variables we chose:
+
+```{r, message=FALSE, warning=FALSE}
+keep_cols <- c("breakfast", "tea.time", "evening", "spirituality", "healthy", "sex", "Sport", "age_Q")
+tea2 <- tea[, keep_cols]
+
+str(tea2)
+summary(tea2)
+```
+
+Now we have only categorical variables that have either two or five categories. Let's make some plots to see how the variables bistribute so that we don't have to look at the summary statistics only:
+
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+
+gather(tea2) %>% ggplot(aes(value)) + facet_wrap("key", scales = "free") + geom_bar() + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+```
+
+Okay so we can see that the biggest class in age is 15-24 years old and the second one is 25-34 years old. The breakfast variable has pretty much same amount of values in both classes while others have bigger differnce between classes. What we actually want to see is that if there are any correlation between any variables and if the observations are grouped in some way. So actually the same thing as in PCA except that the data is categorical this time.
+
+Let's just perform the MCA analysis:
+
+```{r, message=FALSE, warning=FALSE}
+mca_tea <- MCA(tea2, graph = FALSE)
+
+summary(mca_tea)
+
+plot(mca_tea, invisible = c("ind"), habillage = "quali")
+```
+
+The summary and plot differs a bit from PCA. From Eigenvalues in the summary we can see the variances associated to each dimension and the percentages. The variances decrease slowly while dimensions increase. Next we have the individuals and their coordinates. If we look at the categories, some of the values are clearly greater than 1.96 or less than -1.96 which indicates that the coordinate is significantly different from zero. Categorical variables tell the correlation between variables and dimensions. The closer the value is to 1, the greater correlation. None of the values is not even greater than 0.5, the largest value is the one with ``age_Q`` and ``Dim.1``. So apparently there are no significant correlations. There are a lot values to look at so maybe it is better to move on to the plot so that we could get a clearer image about the variables.
+
+So the MCA factor map shows the possible values/classes of each variable plotted in the map where Dim 1 is the x axis and Dim 2 the y axis. What we are interested in is the distances of the groups from each other - the smaller the distance, the more similar the categories are. For example we can see that the *no tea time* -group is pretty close to the male-group. Also categories *not healthy* and *evening* are pretty close to each other. This means that the ones that have answered the 'not healthy' option are the ones that prefer to drink tea in the evening. We can also see that the +60 group is quite far from any of the other categories which would mean that there are no really any other variables that could be associate to seniors.
+
+We could have tried to use other variables to see if there would have been any better correlations between them and create a bit better profiling. However, this also gave us some information, even though these two dimensions capture only fourth of the variance of the variables. 
