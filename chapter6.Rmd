@@ -1,0 +1,292 @@
+---
+title: "chapter6"
+author: "Veera Nenonen"
+date: "8 joulukuuta 2018"
+output: html_document
+---
+
+## Week 6: Analysis of longitudal data
+
+Last week's task is to analyze two different datasets that are from longitudal studies. We are going to use different methods to get some possibly interesting results from the data. First we are going to make some graphical displays and summary measure approach. After that we'll use linear mixed effects models. The goal of this report is to show how longitudal data can be examined and what kind of difficulties we might have to face with this kind of data.
+
+### The data
+
+As said earlier, we are going to use two different datasets that are found from MABS. The first one is called [RATS](https://raw.githubusercontent.com/KimmoVehkalahti/MABS/master/Examples/data/rats.txt) which is collected for a study that examines the impact of different diets on weight. Test subjects were three different groups of rats. The study took over nine weeks and the rats were weighted once every week (except one week they were weighted twice).
+
+The second one is [BPRS](https://raw.githubusercontent.com/KimmoVehkalahti/MABS/master/Examples/data/BPRS.txt) data that contains information of 40 men. The aim of the study was to find out if there was any difference between two different treatments. The variable that was measured was a brief psychiatric rating scale (BPRS). Test subject were scaled right before the study and after that once a week for eight weeks. The score measures 18 different symptoms that can be associated to schizophrenia. More information about these datasets and the methods that are used can be found from [here](https://mooc.helsinki.fi/pluginfile.php/29659/course/section/2208/MABS4IODS-Part6.pdf).
+
+### Graphical Displays and Summary Measure Approach
+
+#### RATS data
+
+We are going to first analyze the RATS data. I already explained a little bit the background of the dataset but let's take a quick look of the structure of the data and what the variables look like. The original data was in wide form but it was changed into long form and few datatypes were changed. After loading the dataset the summary of ot looks like this:
+
+```{r, message = FALSE, warning = FALSE}
+load("data/RATSL.rdata")
+rats <- rats_l # I'll rename the data as rats just to make it easier. This is still the longitudal data.
+
+str(rats)
+summary(rats)
+```
+
+The ``rats`` dataset has 4 variables and 176 observations. There are 16 rats and one rat belongs in one of the three groups: eight in group 1, and four in group 2 and the rest four in group 3. Each rat has been weighted multiple times and one row represents the value of one weighting from one rat. There is also the number of the day as one variable to see which part of the experiment the weight has been recorded. There is also some summary statistics of the variables. The mean of all the weights is approximately 345 grams, though this is not very interesting informtion since there are different groups and time variable that we should include in the statistics. Next we can move on to the visualization.
+
+
+#### Graphical displays
+
+We are now enough familiar with the data so that we can make some visalizations of it to see how variables distribute. This will give us more information about the observations and what kind of methods and tests would be most suitable. Let's first take a look of a line charts that shows all the rats in their own lines so that we can see how an individual observation distributes:
+
+```{r}
+library(ggplot2)
+
+ggplot(rats, aes(x = day, y = weight, group = ID)) +
+  geom_line()
+
+ggplot(rats, aes(x = day, y = weight, linetype = ID)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times = 4)) +
+  facet_grid(. ~ Group, labeller = label_both) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(rats$weight), max(rats$weight)))
+```
+
+In the first plot we can see the progress of all the rats' weights. We can see that approximately half of the rats are much lighter than others. The lightest rats are less than 300 grams through the whole experiment while the heavier ones weight more than 400 grams, the heaviest weights at the end of the experiment more than 600 grams - almost three times more than the lightest one. There seems to be happening at least a slight increase in weight with almost all rats. The increase looks a bit more noticeable on rats with higher starting weight.
+
+The second figure is the same as the first one, except that in this one the rats are grouped by the ``Group`` variable. Each group has their own plot so that we can see how the groups are distributed. Apparently all the rats that had lower weight belong in the group 1. Especially one is a little bit separated from others and is quite small compared to others, though I would not necessarily call it an outlier observations in the group 2 is much heavier than others. Its line can be seen right on top of the plot in the middle. It can be a little bit tricky because it can have impact on whole group's statistics. Such extreme values tend to give biased results for example when calculating mean values. There is also one observation in the group 3 that is a little bit separated from others, but I don't see it as a problem.
+
+These plots are a little bit difficult to interpret since there are a lot of observations to look at. It it hard to look at certain observations because the lines are so close to each other. However, we got some information about the groups and how weights change.
+
+Let's quick take a look at another graphs that will show us how means of the groups differ from each other. Before that we need little bit change our data. We'll make a new dataset called ``mean_data`` just for the means so that we can plot the line charts correctly. Here's a line chart that shows how the mean of weights in different groups change within the time period and a boxplot of the groups: 
+
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+
+mean_data <- group_by(rats, Group, day) %>%
+             summarise(weight = mean(weight))
+
+ggplot(mean_data, aes(x = day, y = weight, colour = Group)) + geom_line()
+
+ggplot(rats, aes(x = as.factor(day), y = weight, colour = Group)) + geom_boxplot()
+
+```
+
+So as we can see from the plots, the means of the weights in these three groups are completely different. It is because the starting weights of rats are not the same at all. We could do the statistical testing to see if the starting weight has a significant impact but we'll skip that. If we actually want to know that is there a difference between the diets and what kind of effect (or if there is such at all) the diets have on the rats we need to find a better measure than just mean like this. That is why we need to do some changes. 
+
+As we noticed earlier, the main issue is with the starting weights. If we'll set the starting weights the same and then compare the changes that will happen, would that make a difference? Yes. That way the groups and individuals would be more comparable. So what we are going to do is that we'll make a new dataset that is the same as our original ``rats`` except that we'll make a variable called ``change`` which measures how much the weight of the rat has changed compared to the starting point. The starting point is set to 0 to each rat. Here's the summary of the new ``rats_c`` data and the grouped line plot we did earlier:
+
+```{r, message=FALSE, warning=FALSE}
+rats_c <- rats %>%
+  group_by(day) %>%
+  mutate(change = (weight - rats$weight[rats$day == 1])) %>%
+  ungroup()
+
+summary(rats_c)
+
+ggplot(rats_c, aes(x = day, y = change, linetype = ID)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times = 4)) +
+  facet_grid(. ~ Group, labeller = label_both) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(rats_c$change), max(rats_c$change)))
+```
+
+Now we can see how the weights of rats change. We can see that the plots start from the same point. It looks like the change is quite rapid in the group 2 and more settle in group 1. Group 3 is somewhere in the middle. There are some observations that have temporary decreases but all the rats have higher weight at the end of the study.
+
+Here we can see the grouped means of the changes of the weights plotted: 
+
+```{r, message=FALSE, warning=FALSE}
+mean_rats_c <- group_by(rats_c, Group, day) %>%
+             summarise(change = mean(change))
+
+ggplot(mean_rats_c, aes(x = day, y = change, colour = Group)) + geom_line()
+
+```
+
+As we noticed earlier, the weight gain is fastest on group 2 and slowest in group 1. The gain seems to be at the end in group 2 almost trice the gain in group 1.
+
+Now that we have done quite a lot of visualizing, we can move on to testing and analyzing!
+
+
+#### Summary measure approach and testing
+
+We already have made a notice that the groups seems to be a little bit different from each other, especially groups 1 and 2, but it is always nice to make proper tests. Before that we'll make one more plot! We'll make a boxplot to visualize the distributions of the group means so that we'll understand better what we are going to test:
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(mean_rats_c, aes(x = Group, y = change)) +
+  geom_boxplot() +
+  stat_summary(fun.y = "mean", geom = "point", shape = 23, size = 4, fill = "white") +
+  scale_y_continuous(name = "mean(change)")
+```
+
+So now we can see how much the means of weight changes differ from each other between groups (we saw it from other plots as well, but I think this shows it the best). Groups 1 and 3 have pretty similar lower parts but after the mean line the range of group 3 goes higher.
+
+We are going to test the groups first with ANOVA and then with t-test. Briefly explained, ANOVA is used to compare the groups together and tell if there is a significant difference between them. So the null hypothesis would be that there is no difference between these three groups. ANOVA does not tell which groups differ from each other so we'll use t-test to see if some of the groups differ and some don't. First we'll do the ANOVA:
+
+```{r, message=FALSE, warning=FALSE}
+fit <- lm(change ~ Group, data = mean_rats_c)
+
+anova(fit)
+```
+
+If we look at the p-value (``Pr(>F)``), it is less than 0.05 which indicates that with 95% confidence interval the groups differ from each other. It would mean that there is a difference between the diets the rats are having. Let's take a look at the t-test results:
+
+```{r, message=FALSE, warning=FALSE}
+t.test(change ~ Group, data = mean_rats_c[mean_rats_c$Group != 3,], var.equal = TRUE)
+t.test(change ~ Group, data = mean_rats_c[mean_rats_c$Group != 2,], var.equal = TRUE)
+t.test(change ~ Group, data = mean_rats_c[mean_rats_c$Group != 1,], var.equal = TRUE)
+```
+
+This is interesting. This indicates that groups 1 and 2 are significantly different, but groups 1 and 3, *and* 2 and 3 aren't. This indicates that the results of ANOVA would be against null hypothesis because of the difference between groups 1 and 2.
+
+There are some issues when changing the data the way we did, because there can be information hidden under the starting weight. It is possible that the weight of a rat might correlate with the amount of weight gain or similar phenomena that might not get noticed. But I think that this was a good enough way to test the difference between the diets. 
+
+
+### Linear Mixed Effects Models
+
+#### BPRS data
+
+Next we are having the BPRS data and another method to investigate longitudinal data. We are already familiar what the BPRS data is measuring but as with previous dataset, we would like to know how this data is structured. Same kind of wrangling that was done to RATS data was also done to this data. What we interested in this time is that how well we can model these scores and to see the differences between treatments.
+
+Here are the data structure and the summary of the ``bprs`` data:
+
+```{r, message=FALSE, warning=FALSE}
+load("data/BPRSL.rdata")
+bprs <- bprs_l
+
+str(bprs)
+summary(bprs)
+```
+
+This data has 4 variables and 360 observations. There are two treatment groups and 40 test subjects (20 in each treatment). The minimum score of all the scores is 18 and the maximum is 95, though we donät know that from which week these have been recorded and are they from same person.
+
+
+#### Visualization
+
+These are the same kind of plots we made earlier to the RATS data, that shows how the scores change through the eight-week time period with each individual. The first plot is for all of the observations and the second one is grouped by the treatment. They might look a bit messy but maybe we'll get some information from them:
+
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+
+# number of ids needed
+no_ids <- length(levels(bprs$treatment)) * length(levels(bprs$subject))
+# set new unique ids
+bprs$id <- rep(1:no_ids, nrow(bprs)/no_ids)
+
+ggplot(bprs, aes(x = week, y = score, group = id)) +
+  geom_line(aes(linetype = treatment)) +
+  scale_x_continuous(name = "Time (weeks)", breaks = seq(0, 8, 2)) +
+  scale_y_continuous(name = "BPRS") +
+  theme(legend.position = "top")
+
+ggplot(bprs, aes(x = week, y = score, linetype = subject)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times = 4)) +
+  facet_grid(. ~ treatment, labeller = label_both) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(bprs$score), max(bprs$score)))
+
+```
+
+Okay, they do look messy - especially the first one. We can see that there is a slight difference between groups. Most of the difference is because of the outlier and some rising lines and spikes in treatment group 2. It looks like overall the scores decrease from most of the test subjects, though there are some observations that seem to have higher score in the end of the study than before. However I would not necessarily say that there is a significant difference between these two groups - but it's hard to say based on only this graph.
+
+I'd like to find out what the means look like in the line chart so that we could get a bit clearer image of the groups:
+
+```{r, message=FALSE, warning=FALSE}
+mean_bprs <- group_by(bprs, treatment, week) %>%
+             summarise(score = mean(score))
+
+ggplot(mean_bprs, aes(x = week, y = score, colour = treatment)) + geom_line()
+
+ggplot(bprs, aes(x = as.factor(week), y = score, colour = treatment)) + geom_boxplot()
+
+```
+
+When looking at the line chart, we can see that with both treatments the scores have a huge drop between week one and five. With treatment 1 the drop continues till sixth week. After that there happens a small growth or almost nothing. As we noticed earlier, there were some outliers that may have some effect on the means. But still, the groups do not look much different. The similarity can be seen even more clearly in the boxplots. The outliers can be seen as the dots above the boxes.
+
+
+#### Linear model
+
+We can now start to trying different models. Let's first start with linear model where we assume that all the observations are independent (even though we know they are not). As explonatory variables we'll have ``week`` that is time as weeks, and ``treatment`` that we have used to group test subjects.
+
+```{r, message=FALSE, warning=FALSE}
+bprs_reg <- lm(score ~ week + treatment, data = bprs)
+summary(bprs_reg)
+```
+
+I'll explain the summary really briefly. If we first look at the Coefficients and the estimte, we'll notice that our time variable has a negative value which means that the increase in the ``week`` variable would mean decrease in scores. The p-values indicate that the relastionship between ``week`` and ``score`` is significant, but between ``treatment`` and ``score`` is not. It is a bit dumb to make models like this since we have quite good knowledge of the relationships of the variables. Well, at least we know that there is no complete independency between scores. Let's move to another model.
+
+
+#### Random intercept model
+
+This model is a little more evolved from the previous one because it allows men differ from each others in intercept (that's where the name of the model comes from). Here is the model summary after setting the same explonatory variables as earlier (``week`` and ``treatment``):
+
+```{r, message=FALSE, warning=FALSE}
+library(lme4)
+
+bprs_ref <- lmer(score ~ week + treatment + (1 | id), data = bprs, REML = FALSE)
+summary(bprs_ref)
+```
+
+Now we can see from the Random effects from the summary that the variance between men is quite much, almost 100, which means that there are much differences between our test subjects when it comes to their BPRS overall. This was also seen from the plots. We can also see that the estimated values did not change much from the previous model, but the standard errors did. The error with time decreased because we now did assume the within subject dependency. However, the error of the treatment increased but it is explained by the data and the sample sizes between these models. The main difference compared to the ``week```variable is that treatment is associated with a phenomena between test subjcts, not within.
+
+#### Random intercept and Slope model
+
+Next we are going to fit a random intercept and a slope model to the data. This model assumes the dependency between subjects **and** also the effect of time, which is pretty important - as we may know: 
+
+```{r, message=FALSE, warning=FALSE}
+bprs_ref1 <- lmer(score ~ week + treatment + (week | id), data = bprs, REML = FALSE)
+
+summary(bprs_ref1)
+```
+
+The statistics look pretty similar compared to the previous model but there has happened an improvement. If we compare this model and the previous one wit the ANOVA, we can see the change:
+
+```{r, message=FALSE, warning=FALSE}
+anova(bprs_ref1, bprs_ref)
+```
+
+If we take a quick look at the p-value, it is really small which shows that the models do differ.
+Now that we have a model that contains necessary dependencies, we can actually examines the dependency between time and treatment!
+
+
+#### Interaction
+
+This will now be our final model that also notices the group and time interaction. Without other unnecessary explainings, let's fit it:
+
+```{r,message=FALSE, warning=FALSE}
+bprs_ref2 <- lmer(score ~ week * treatment + (week | id), data = bprs, REML = FALSE)
+
+summary(bprs_ref2)
+```
+
+And here is the test when compared to previous model: 
+
+```{r,message=FALSE, warning=FALSE}
+anova(bprs_ref2, bprs_ref1)
+```
+
+Oh, funny. It looks like there actually is no significant difference. It would indicate that when adding groups in the model they do not bring any significant value to it. So this might tell that there are no really difference between groups. We were assuming this when making the plots but this explains a little  bit more. It would mean that the treatments do not differ when looking at the BPRS scores.
+
+Here are the same plots than in the beginning but with fitted values:
+
+```{r, message=FALSE, warning=FALSE}
+Fitted <- fitted(bprs_ref2)
+
+bprs <- bprs %>%
+  mutate(Fitted)
+
+ggplot(bprs, aes(x = week, y = Fitted, group = id)) +
+  geom_line(aes(linetype = treatment)) +
+  scale_x_continuous(name = "Time (weeks)", breaks = seq(0, 8, 2)) +
+  scale_y_continuous(name = "BPRS score") +
+  theme(legend.position = "top")
+
+ggplot(bprs, aes(x = week, y = Fitted, linetype = subject)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times = 4)) +
+  facet_grid(. ~ treatment, labeller = label_both) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(bprs$score), max(bprs$score)))
+```
+
+We can see from the plots that is made from the interaction model that it does make some kind of profiles, but they are pretty straight-forward compared to the real observed values. I would say it works a bit better with the treatment 1 than 2. 
